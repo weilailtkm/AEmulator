@@ -823,6 +823,13 @@ static long trap2(long nr, long *a, void *uc, char **pbp) {
             if (pre(P(1), "/sys/fs/cgroup/")) {
                 const char *l = P(1);
                 for (const char *c = P(1); *c; c++) if (*c == '/' && c[1]) l = c + 1;
+                // 17: netd asks the hierarchy which controllers it has before it touches any of them, and an empty
+                // answer is fatal to it. There is no kernel cgroupfs behind this tree, so answer with the list a real
+                // cgroup2 root reports. Reads only; writes still fall through to /dev/null below.
+                if (!(a[2] & 03)) {
+                    if (seq(l, "cgroup.controllers")) { static const char s[] = "cpuset cpu io memory pids\n"; return fake_memfile("aemu-cgctl", s, sizeof s - 1); }
+                    if (seq(l, "cgroup.subtree_control")) { static const char s[] = "cpu io memory pids\n"; return fake_memfile("aemu-cgsub", s, sizeof s - 1); }
+                }
                 if (!pre(l, "uid_") && !pre(l, "pid_") && l[0] != '.') return S4(NR_openat, AT_FDCWD, "/dev/null", a[2] & 02000003, 0);
             }
             if (P(1)[0] == '/' && P(1)[1] == 'd') {
