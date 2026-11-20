@@ -16,20 +16,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install NDK and platform
+      - name: Install platform and build-tools
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "ndk;28.0.13004108" "platforms;android-36" "build-tools;36.0.0"
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}
+          SDKM=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager
+          [ -x "$SDKM" ] || SDKM=$(ls $ANDROID_SDK_ROOT/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          echo "sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" 2>&1 | tail -3
 
       - name: Build guest64 engine (API 37)
         run: |
-          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/28.0.13004108"
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}
+          NDKDIR=$(ls -d $ANDROID_SDK_ROOT/ndk/* 2>/dev/null | sort -V | tail -1)
+          if [ -z "$NDKDIR" ]; then
+            SDKM=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager
+            yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+            "$SDKM" --install "ndk;27.2.12479018" 2>&1 | tail -2
+            NDKDIR=$ANDROID_SDK_ROOT/ndk/27.2.12479018
+          fi
+          echo "NDK=$NDKDIR"
+          export ANDROID_NDK_HOME="$NDKDIR"
           chmod +x native/guest64/build.sh
           sh native/guest64/build.sh 37
-          ls -la app/src/main/jniLibs/arm64-v8a/ | head
+          ls -la app/src/main/jniLibs/arm64-v8a/
 
       - name: Build debug APK
         run: |
